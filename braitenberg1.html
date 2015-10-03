@@ -1,0 +1,235 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0px;
+        padding: 0px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="myCanvas" width="2000" height="2000"></canvas>
+    <script>
+    	"use strict"
+
+		var canvas = document.getElementById('myCanvas');
+		var context = canvas.getContext('2d');
+
+		class Point{
+			constructor(x,y){
+				this.x = x;
+				this.y = y;
+			}
+
+			displace(x,y){
+				this.x += x; 
+				this.y += y;
+			}
+		}
+
+		class Vector{
+			constructor(p1,p2)
+			{
+				this.P1 = p1;
+				this.P2 = p2;
+				this.magnitude =Math.sqrt( Math.pow((p1.x - p2.x),2) + Math.pow((p1.y - p2.y),2) );
+			}
+		}
+
+		class Circle{
+			constructor(radius){
+				this.radius = radius;
+			}
+
+			draw(context,position){
+				context.beginPath();
+				context.arc(position.x,position.y,this.radius,0,2*Math.PI);
+				context.fillStyle = 'orange';
+				context.fill();
+				context.lineWidth = 2;
+				context.strokeStyle = 'black';
+				context.stroke();
+			}
+		}
+
+		class Rectangle{
+			constructor(width,height,color){
+				this.width = width;
+				this.height = height;
+				this.color = color;
+				this.centroid = new Point(width / 2.0, height / 2.0);
+			}
+			
+			draw(context,x,y){
+				context.beginPath();
+				//context.rect(x, y, this.width, this.height);
+				context.fillStyle = this.color;
+				context.rect(x, y, this.width, this.height);
+				context.fill();
+				context.lineWidth = 1;
+				context.strokeStyle = 'black';
+				context.stroke();
+			}
+		}
+
+		class Buggy1{
+			constructor(x,y,angle/*in rad*/,width,height,color){
+				this.speedX = 0.0; this.speedY = 0.0;
+				this.x = x; this.y = y;
+				this.angle = angle;
+				this.sensorHeight = height * 0.2;
+				this.sensorWidth  = width  * 0.2;
+
+				this.trunk = new Rectangle(width,height,color);
+				this.sensor_L = new Rectangle(this.sensorWidth, this.sensorHeight,'red');
+				this.sensor_R = new Rectangle(this.sensorWidth, this.sensorHeight,'green');
+
+				this.sensorPosition_L = new Point(this.trunk.width  + this.sensor_L.centroid.x, 
+										          this.sensor_L.centroid.y);
+
+				this.sensorPosition_R = new Point(this.trunk.width  + this.sensor_R.centroid.x, 
+										          this.trunk.height - this.sensor_R.centroid.y);
+			}
+
+			move(context){
+				context.save();
+				var offsetX = this.trunk.width  / 2.0;
+				var offsetY = this.trunk.height / 2.0;
+				context.translate(this.x + offsetX, this.y + offsetY);
+				//console.log("offset "+offsetX + ", "+ offsetY);
+				
+				context.rotate(this.angle);
+				
+				this.trunk.draw(context, -offsetX, -offsetY);
+				
+				this.sensor_L.draw(context, 
+					-offsetX + this.trunk.width, 
+					-offsetY);
+
+				this.sensor_R.draw(context, 
+					-offsetX + this.trunk.width, 
+					-offsetY + this.trunk.height - this.sensorHeight/*line height*/);
+
+				this.x += this.speedX;
+				this.y += this.speedY;
+				context.restore();
+			}
+
+			applyFriction(acceleration){
+				var FRICTION = 0.001;
+				if(Math.abs(acceleration) - FRICTION > 0.00001)
+					if(acceleration > 0.0)
+						acceleration -= FRICTION;
+					else if (acceleration < 0.0)
+						acceleration += FRICTION;
+
+				return acceleration;
+			}
+
+			updateEnergy(solarP){
+				var energy_L = 0.0;
+				var energy_R = 0.0;
+
+				//assume the left sensor is powers right motor and so on
+
+				//distance to sensors
+				var sL = new Point(this.x + this.sensorPosition_L.x, this.y + this.sensorPosition_L.y);
+				var sR = new Point(this.x + this.sensorPosition_R.x, this.y + this.sensorPosition_R.y);
+
+				var v1 = new Vector(solarP, sL);
+				var v2 = new Vector(solarP, sR);
+
+				var k1 = 1.70;
+				energy_L = k1 / v1.magnitude; //energy on Left sensor
+				energy_R = k1 / v2.magnitude; //energy on Right sensor
+
+				//console.log("energy " + energy_L + ", " + energy_R);
+				console.log("net energy = " + (energy_R - energy_L));
+				console.log("mag L= " + v1.magnitude + ", R = " + v2.magnitude);
+
+				//sensor -> motor wiring
+				var forceMotorL = energy_R;
+				var forceMotorR = energy_L;
+
+				//Not proper physics here... just a hack
+				var l = this.trunk.height / 2.0;
+				var k = 10000.0; //some constant
+				var theta = k * l * (forceMotorL - forceMotorR);
+				console.log("theta = " + theta);
+				
+				this.angle = theta * Math.PI / 180.0;
+				console.log("angle = " +  this.angle)
+				
+				var k2 = 100.0; //force multiplier
+				var F = k2 * Math.abs(forceMotorL - forceMotorR);
+				console.log("Force = " + F);
+				
+				var accelerationX = F * Math.cos(this.angle);
+				var accelerationY = F * Math.sin(this.angle);
+				console.log("acceleration =" + accelerationX + ", " + accelerationY);
+
+				//Friction
+				accelerationX = this.applyFriction(accelerationX);
+				accelerationY = this.applyFriction(accelerationY);
+
+
+				this.speedX += accelerationX;
+				this.speedY += accelerationY;
+				//*/
+			}
+		}
+
+		//execute
+		var solar = new Circle(10);
+		var solarP = new Point(1000, 1000);
+
+		var buggy1 = new Buggy1(500,500,0/*0.785398*/,30,30, 'blueviolet');
+		
+		var buggy2 = new Buggy1(100,1900,0/*2.35619*/,30,30, 'cadetblue');
+		var buggy3 = new Buggy1(1900,100,0/*3.14159*/,30,30, 'dimgray');
+		var buggy4 = new Buggy1(1900,1900,0/*3.92699*/,30,30, 'gold');
+		//buggy1.updateEnergy(0.1,0);
+		function drawGrid(context,w,h,d){
+			for(var x = 0; x <=w; x+=d){
+				context.moveTo(x,0);
+				context.lineTo(x,h);
+			}
+			for(var y = 0; y <=h; y+=d){
+				context.moveTo(0,y);
+				context.lineTo(w,y);
+			}
+			context.strokeStyle = "gainsboro";
+			context.lineWidth = 0.5;
+			context.stroke();
+		}
+
+			buggy1.updateEnergy(solarP);
+			//buggy2.updateEnergy(solarP);
+			//buggy3.updateEnergy(solarP);
+			//buggy4.updateEnergy(solarP);
+
+		function drawCallback(){
+			context.globalCompositeOperation = 'destination-over';
+			context.clearRect(0,0, canvas.width, canvas.height);
+			
+			drawGrid(context,canvas.width,canvas.height,10);
+			
+			solar.draw(context,solarP);
+
+			buggy1.updateEnergy(solarP);
+			// buggy2.updateEnergy(solarP);
+			// buggy3.updateEnergy(solarP);
+			// buggy4.updateEnergy(solarP);
+
+			buggy1.move(context);
+			//buggy2.move(context);
+			//buggy3.move(context);
+			//buggy4.move(context);
+
+		}
+
+		window.setInterval(drawCallback,50);
+    </script>
+  </body>
+</html>      
